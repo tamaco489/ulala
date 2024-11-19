@@ -1,0 +1,112 @@
+version: '3.8'
+
+volumes:
+  db-store:
+
+networks:
+  proto-nw:
+
+services:
+  # In development, comment out, but database migration is required.
+  backend:
+    image: dev-ulala-backend:latest
+    container_name: backend
+    build:
+      context: ./
+      dockerfile: Dockerfile.backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    networks:
+      - proto-nw
+
+  # In development, comment out.
+  frontend:
+    image: dev-ulala-frontend:latest
+    container_name: frontend
+    build:
+      context: ./
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    networks:
+      - proto-nw
+
+  # Bug: When starting simultaneously with other containers, the backend starts before MySQL, causing this dependent container to fail as well.
+  # Therefore, for the initial startup, please start the container with the comment-outed state, confirm that the backend is up and running, then uncomment and start the container again.
+  # Will be modified to manually activate in the future
+  # bastion:
+  #   image: dev-ulala-bastion:latest
+  #   container_name: bastion
+  #   build:
+  #     context: ./
+  #     dockerfile: Dockerfile.bastion
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - proto-nw
+
+  mysql:
+    # platform: linux/x86_64
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --default-time-zone='Asia/Tokyo'
+    environment:
+      MYSQL_USER: proto
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: password0#
+      MYSQL_DATABASE: proto
+      MYSQL_ROOT_HOST: '%'
+    volumes:
+      - db-store:/var/lib/mysql
+      - ./docker/logs/mysql:/var/log/mysql
+      - ./docker/etc/mysql/conf.d:/etc/mysql/conf.d
+    ports:
+      - "3306:3306"
+    networks:
+      - proto-nw
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  redis:
+    image: "redis:7.0"
+    container_name: redis
+    restart: always
+    networks:
+      - proto-nw
+
+  minio:
+    image: minio/minio:latest
+    container_name: proto-minio
+    environment:
+      MINIO_ROOT_USER: minio_access_key
+      MINIO_ROOT_PASSWORD: minio_secret_key
+    ports:
+      - 9000:9000
+      - 9090:9090
+    volumes:
+      - ./docker/minio/data:/data
+    command: server --console-address :9090 /data
+
+  miniocreatebucket:
+    image: minio/mc:latest
+    container_name: proto-minio-create-bucket
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+        mc config host add minio http://minio:9000 minio_access_key minio_secret_key;
+        if ! mc ls minio/ | grep -q proto; then
+          mc mb minio/proto;
+          mc policy set public minio/proto;
+        fi
+      "

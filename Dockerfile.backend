@@ -1,0 +1,10 @@
+FROM golang:1.21-alpine
+
+WORKDIR /app/go
+COPY go/ ./
+RUN go mod tidy
+
+ENV SERVER_PORT=8080
+RUN SERVER_PORT=${SERVER_PORT} go build -o /bin/api-server ./main.go
+
+ENTRYPOINT ["/bin/api-server"]

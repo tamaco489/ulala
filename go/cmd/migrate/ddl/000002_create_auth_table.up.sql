@@ -1,0 +1,8 @@
+CREATE TABLE `user_firebase_authentications` (
+  `firebase_uid` VARCHAR(28) NOT NULL,
+  `uuid` VARCHAR(50) NOT NULL UNIQUE,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`firebase_uid`),
+  INDEX `uuid_index` (`uuid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
